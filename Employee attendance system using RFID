@@ -1,42 +1,69 @@
-# RFID Based Employee Attendance System using LPC2129
+#include <lpc21xx.h>
 
-## Project Overview:
-This project records employee attendance using RFID technology. Each employee carries a unique RFID tag. When the RFID reader scans a tag, the system marks the attendance and provides confirmation via buzzer or LED. It eliminates manual registers and improves accuracy.
+#define LCD_DATA_PORT 0xFF << 8    // P1.16 to P1.23
+#define RS (1 << 0)
+#define EN (1 << 1)
+#define BUZZER (1 << 25)
+#define RFID_INPUT (1 << 10)       // Simulated RFID input on P0.10
 
-## Working Principle:
-- Each employee is assigned an RFID tag.
-- The RFID reader scans the tag and verifies identity.
-- A valid tag triggers buzzer and logs attendance.
-- An invalid or repeated scan is ignored or flagged.
+void delay(unsigned int time) {
+    unsigned int i, j;
+    for (i = 0; i < time; i++)
+        for (j = 0; j < 6000; j++);
+}
 
-## Components Used:
-- LPC2129 ARM7 Microcontroller
-- RFID Reader (RC522)
-- RFID Tags
-- LCD Display (16x2)
-- Buzzer
-- LEDs
-- MAX232 (for serial debugging)
-- Power Supply, Breadboard, Jumper Wires
+void lcd_command(unsigned char cmd) {
+    IOCLR1 = LCD_DATA_PORT;
+    IOSET1 = (cmd << 16);
+    IOCLR0 = RS;   // Command mode
+    IOSET0 = EN;
+    delay(2);
+    IOCLR0 = EN;
+}
 
-## Technologies Used:
-- Embedded C Programming
-- Keil µVision IDE
-- Flash Magic (to flash the code)
-- Serial communication (for debugging)
+void lcd_data(unsigned char data) {
+    IOCLR1 = LCD_DATA_PORT;
+    IOSET1 = (data << 16);
+    IOSET0 = RS;   // Data mode
+    IOSET0 = EN;
+    delay(2);
+    IOCLR0 = EN;
+}
 
-## Features:
-- Automatic attendance logging
-- Fast and contactless scanning
-- Reduces manual error
-- Easy to extend to database storage
+void lcd_init() {
+    IODIR1 |= LCD_DATA_PORT;
+    IODIR0 |= RS | EN | BUZZER;
+    
+    lcd_command(0x38);  // 2 line LCD
+    lcd_command(0x0C);  // Display ON
+    lcd_command(0x06);  // Auto increment
+    lcd_command(0x01);  // Clear
+    delay(2);
+}
 
-## Future Scope:
-- Integration with real-time database (MySQL)
-- Admin-controlled web dashboard
-- Biometric-RFID hybrid system
+void lcd_string(const char *str) {
+    while (*str) {
+        lcd_data(*str++);
+    }
+}
 
----
+int main(void) {
+    PINSEL0 = 0x00000000;  // Configure all P0 as GPIO
+    IODIR0 |= BUZZER;
+    IODIR0 &= ~RFID_INPUT; // RFID as input
 
-**Project Developed By:**  
-**Rahul Sattenapalle**
+    lcd_init();
+    lcd_string("Place Your Card");
+
+    while (1) {
+        if (!(IOPIN0 & RFID_INPUT)) {
+            lcd_command(0x01);  // Clear display
+            lcd_string("Attendance Marked");
+            IOSET0 = BUZZER;
+            delay(1000);
+            IOCLR0 = BUZZER;
+            lcd_command(0x01);
+            lcd_string("Place Your Card");
+        }
+    }
+}
